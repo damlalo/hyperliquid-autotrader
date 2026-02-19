@@ -1,49 +1,55 @@
-# Base config — override with paper/canary/live. All secrets from env.
+# config/base.yaml (safe defaults)
+env: paper  # paper|canary|live
 
-# Hyperliquid (URLs from env or defaults; keys always from env)
-hl:
-  info_url: ${HL_INFO_URL:-https://api.hyperliquid.xyz/info}
-  exchange_url: ${HL_EXCHANGE_URL:-https://api.hyperliquid.xyz/exchange}
-  ws_url: ${HL_WS_URL:-wss://api.hyperliquid.xyz/ws}
-  # HL_ACCOUNT_ADDRESS, HL_API_WALLET_PRIVATE_KEY from env
+hyperliquid:
+  rest_url: "https://api.hyperliquid.xyz"
+  ws_url: "wss://api.hyperliquid.xyz/ws"
+  account_address: "${HL_ACCOUNT_ADDRESS}"
+  api_wallet_private_key: "${HL_API_WALLET_PRIVATE_KEY}"
+  vault_address: ""  # optional
 
-# Universe and timeframes
 universe:
-  filter: volume  # or open_interest; TODO: min thresholds
-  symbols: []      # optional explicit list; else from filter
-timeframes: [1m, 5m, 1h]
+  top_n_by_liquidity: 8
+  refresh_minutes: 60
+  min_notional_24h: 100000000
+  max_spread_bps: 3.0
+  min_top_book_depth_usd: 200000
 
-# Risk (immutable caps; strategies cannot override)
+timeframes:
+  regime: ["1h", "4h"]
+  signal: ["15m"]
+  execution: ["1m"]
+
 risk:
-  max_portfolio_exposure_usd: 100000
-  max_per_position_usd: 20000
-  max_leverage: 5
-  daily_loss_limit_bps: 500
-  weekly_loss_limit_bps: 1500
-  max_drawdown_bps: 2000
+  mode: cross  # cross or isolated (policy-driven)
+  equity_risk_per_trade_min: 0.002
+  equity_risk_per_trade_max: 0.01
+  max_concurrent_positions: 4
+  max_total_notional_multiple: 2.5
+  daily_loss_limit_pct: 0.05
+  weekly_loss_limit_pct: 0.12
+  max_drawdown_pct: 0.18
+  min_expected_rr: 1.8
+  liquidation_buffer_pct: 0.25
 
-# Execution
 execution:
-  fee_bps: 5
-  slippage_bps: 3
-  # order types / limits per HL
+  prefer_maker: true
+  max_slippage_bps: 5.0
+  max_order_retries: 3
+  chase_seconds: 8
+  post_only_on_entries: true
 
-# Governance
 governance:
-  baseline_path: artifacts/baselines/current.json
-  history_dir: artifacts/baselines/history
-  gate_utility_min: 0.0   # TODO: define metric
-  gate_max_dd_bps: 2500
-  gate_cvar_percentile: 95
+  require_walkforward: true
+  require_robustness: true
+  candidate_must_beat_baseline_by_utility: 0.05
+  max_candidate_maxdd_pct: 0.20
+  probation_days: 7
 
-# Observability
 observability:
-  log_level: INFO
-  metrics_port: 9090
-  # ALERT_WEBHOOK_URL from env if set
+  prometheus_port: 9109
+  log_level: "INFO"
 
-# Storage
 storage:
-  postgres_dsn_env: POSTGRES_DSN
-  parquet_path: data/processed
-  manifests_path: data/manifests
+  postgres_dsn: "${POSTGRES_DSN}"
+  dataset_manifest_dir: "data/manifests"

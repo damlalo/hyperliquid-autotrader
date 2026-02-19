@@ -1,6 +1,2 @@
-# Canary — live orders with reduced caps. Short probation.
+# Canary — live orders with reduced size/caps; probation.
 env: canary
-risk:
-  max_portfolio_exposure_usd: 20000
-  max_per_position_usd: 5000
-  max_leverage: 3

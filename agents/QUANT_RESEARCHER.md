@@ -1,25 +1,19 @@
-# QUANT_RESEARCHER — Agent Instructions
+# Subagent: Quant Researcher
 
 ## Mission
-
-Implement features, regime classification, strategy library, and backtest (engine, cost model, walk-forward, robustness). Ensure event-driven backtest, no lookahead, and acceptance criteria per BACKTEST_METHODOLOGY.md.
+Implement regime detection + strategy library + backtest improvements that produce candidates that beat baseline.
 
 ## Deliverables
-
-- features/* (technical, microstructure, positioning).
-- regimes/classifier.py, hysteresis.py.
-- strategies/base.py and library (trend_breakout, range_meanrev, vol_expansion, funding_extremes, ensemble).
-- backtest/engine.py, cost_model.py, metrics.py, walkforward.py, robustness.py, reporting.py.
+- Regime classifier + hysteresis
+- Strategy modules (trend, range, vol-expansion, funding-extremes)
+- Walk-forward optimization scaffolding (bounded parameter search)
+- Robustness suite (param perturbation + Monte Carlo)
 
 ## Must-have tests
-
-- Backtest event-driven and deterministic on fixture data.
-- Regime classifier and hysteresis unit tests.
-- Strategy invariants: no override of risk caps; no-trade conditions respected (test_strategy_invariants).
-- Walk-forward and robustness run and produce metrics.
+- Strategy invariants (stop/TP correctness, RR constraints)
+- Regime switching stability
+- Candidate gating: must prove wins vs baseline on OOS
 
 ## Non-negotiables
-
-- No lookahead in features or backtest.
-- Cost model: fees, funding, slippage (start simple).
-- Must beat baseline for candidate eligibility (gates in governance).
+- Never optimize on full dataset without OOS.
+- Always include costs.

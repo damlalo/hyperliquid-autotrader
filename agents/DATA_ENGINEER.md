@@ -1,24 +1,21 @@
-# DATA_ENGINEER — Agent Instructions
+# Subagent: Data Engineer
 
 ## Mission
-
-Implement and maintain the data pipeline: collectors (candles, L2, funding/OI, user state), transforms (resample, cleaning), store (datastore, Postgres, Parquet), and dataset hashing. Ensure no lookahead, deterministic hashes, and reproducibility.
+Build reliable market data ingestion for Hyperliquid (REST bootstrap + WS streaming) and a reproducible historical store.
 
 ## Deliverables
-
-- data/collectors/* (candles, l2book, funding_oi, user_state) writing to store.
-- data/transforms/* (resample, cleaning).
-- store/datastore.py, postgres.py, parquet.py, dataset_hash.py.
-- Dataset manifests and hash used in governance and backtest.
+- Candle bootstrap via candleSnapshot (max 5000 candles per query)
+- WS candle subscriber to append continuously
+- Dedup + gap detection + integrity checks
+- Dataset manifest + deterministic hashing
+- Storage implementation (Postgres recommended)
 
 ## Must-have tests
-
-- Dataset hash deterministic for same inputs.
-- Transforms and feature pipelines do not use future data (unit test with known series).
-- Store read/write for candles and funding (unit or integration with skip if no DB).
+- Dedup is correct
+- Gap detection flags missing bars
+- Dataset hash stable given same inputs
+- Read/write roundtrip
 
 ## Non-negotiables
-
-- All secrets (e.g. Postgres) from env vars.
-- Data model aligns with docs/DATA_MODEL.md.
-- Do not invent HL endpoints; use REFERENCES.md and TODO if unknown.
+- All collectors respect the rate limiter.
+- If WS falls behind, collector must recover via REST snapshot and reconcile.

@@ -1,24 +1,28 @@
 #!/usr/bin/env python3
-"""Healthcheck: config, env, connectivity. Skeleton."""
+"""Startup verification. Must block the bot from trading if any check fails:
+websocket connect, REST reachability, account read access, nonce window validity
+and persistence, rate limit budgeter, and dataset availability.
+Nonce constraints are strict on Hyperliquid."""
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Healthcheck")
-    parser.add_argument("--config", type=str, default="config/paper.yaml", help="Config path")
+    # 1) verify config + secrets present
+    # 2) verify REST /info reachable and returns meta
+    # 3) verify WS connect and can subscribe/unsubscribe
+    # 4) verify server time sync within tolerance
+    # 5) verify account state readable (clearinghouseState)
+    # 6) verify nonce store writable + next nonce valid
+    # 7) verify rate limiter initialized (1200 weight/min policy)
+    # 8) verify kill switch is not engaged
+    parser = argparse.ArgumentParser(description="Healthcheck (blocks trading if any check fails)")
+    parser.add_argument("--config", type=str, default="config/base.yaml", help="Config path")
     args = parser.parse_args()
-
-    print(f"[healthcheck] Config: {args.config}")
-    required = ["HL_ACCOUNT_ADDRESS", "HL_API_WALLET_PRIVATE_KEY"]
-    missing = [k for k in required if not os.environ.get(k)]
-    if missing:
-        print(f"[healthcheck] Missing env: {missing}")
-        return 1
-    print("[healthcheck] Env OK; TODO: HL info ping, DB ping if POSTGRES_DSN set")
+    # TODO: load config, run each check; return 1 on first failure
+    print(f"[healthcheck] Config: {args.config}; TODO: implement all 8 checks")
     return 0
 
 

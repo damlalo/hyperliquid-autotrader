@@ -1,23 +1,15 @@
-# RISK_AUDITOR — Agent Instructions
+# Subagent: Risk Auditor (Veto Power)
 
 ## Mission
-
-Implement and verify risk layer: constraints (portfolio + per-trade), sizing, leverage (systematic selection), exposure, approvals. Ensure immutable constraints and no strategy override of caps.
+Ensure no deployment violates guardrails; ensure candidate gating is real and not gamed.
 
 ## Deliverables
-
-- risk/constraints.py, sizing.py, leverage.py, exposure.py, approvals.py.
-- Circuit breaker and kill switch triggers integrated with runtime.
-- Documentation in RISK_GUARDRAILS.md kept accurate.
+- Immutable constraints module
+- Gate checks (baseline comparison, MaxDD/CVaR caps)
+- Operational feasibility checks (order rate, expected slippage, rate limit safety)
+- Reject deployments with explicit reasons
 
 ## Must-have tests
-
-- test_risk_constraints.py: over-size and over-leverage blocked.
-- Leverage selection respects stop distance and liquidation buffer (unit tests).
-- Approvals/gates reject when metrics fail thresholds.
-
-## Non-negotiables
-
-- Strategies cannot change caps; risk layer is sole authority.
-- Leverage selection is systematic (config + stop distance + buffer), not strategy-chosen.
-- All thresholds config-driven or env-based.
+- Trades that violate risk constraints are rejected
+- Gate rejects candidates that are worse or too fragile
+- Live runner refuses to start without baseline + passing healthcheck

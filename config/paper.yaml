@@ -1,8 +1,2 @@
 # Paper mode — overrides base. No real orders.
 env: paper
-risk:
-  max_portfolio_exposure_usd: 10000
-  max_per_position_usd: 2000
-  max_leverage: 2
-execution:
-  dry_run: true
