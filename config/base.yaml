@@ -1,0 +1,49 @@
+# Base config — override with paper/canary/live. All secrets from env.
+
+# Hyperliquid (URLs from env or defaults; keys always from env)
+hl:
+  info_url: ${HL_INFO_URL:-https://api.hyperliquid.xyz/info}
+  exchange_url: ${HL_EXCHANGE_URL:-https://api.hyperliquid.xyz/exchange}
+  ws_url: ${HL_WS_URL:-wss://api.hyperliquid.xyz/ws}
+  # HL_ACCOUNT_ADDRESS, HL_API_WALLET_PRIVATE_KEY from env
+
+# Universe and timeframes
+universe:
+  filter: volume  # or open_interest; TODO: min thresholds
+  symbols: []      # optional explicit list; else from filter
+timeframes: [1m, 5m, 1h]
+
+# Risk (immutable caps; strategies cannot override)
+risk:
+  max_portfolio_exposure_usd: 100000
+  max_per_position_usd: 20000
+  max_leverage: 5
+  daily_loss_limit_bps: 500
+  weekly_loss_limit_bps: 1500
+  max_drawdown_bps: 2000
+
+# Execution
+execution:
+  fee_bps: 5
+  slippage_bps: 3
+  # order types / limits per HL
+
+# Governance
+governance:
+  baseline_path: artifacts/baselines/current.json
+  history_dir: artifacts/baselines/history
+  gate_utility_min: 0.0   # TODO: define metric
+  gate_max_dd_bps: 2500
+  gate_cvar_percentile: 95
+
+# Observability
+observability:
+  log_level: INFO
+  metrics_port: 9090
+  # ALERT_WEBHOOK_URL from env if set
+
+# Storage
+storage:
+  postgres_dsn_env: POSTGRES_DSN
+  parquet_path: data/processed
+  manifests_path: data/manifests

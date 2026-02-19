@@ -1,0 +1,3 @@
+-- Optional init for local Postgres. TODO: tables per DATA_MODEL.md
+-- CREATE TABLE IF NOT EXISTS candles (...);
+-- CREATE TABLE IF NOT EXISTS fills (...);

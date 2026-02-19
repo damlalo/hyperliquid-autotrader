@@ -1,0 +1,19 @@
+# Optional local stack (Postgres, Grafana, Prometheus). Placeholder.
+version: "3"
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: autotrader
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: autotrader
+    ports:
+      - "5432:5432"
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   volumes:
+  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ports:
+  #     - "3000:3000"

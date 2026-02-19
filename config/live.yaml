@@ -1,0 +1,3 @@
+# Live — full caps. Only after canary pass and gates.
+env: live
+# Uses base risk caps; no overrides here unless intentional.
