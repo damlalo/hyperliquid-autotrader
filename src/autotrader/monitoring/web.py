@@ -34,10 +34,23 @@ import asyncio
 import collections
 import json
 import threading
+import time
 from typing import Any, Optional
 
 from aiohttp import web
 from prometheus_client import REGISTRY
+
+# ---------------------------------------------------------------------------
+# In-process analysis state (populated by scheduler each loop)
+# ---------------------------------------------------------------------------
+
+_ANALYSIS_STATE: dict = {}
+
+
+def update_analysis_state(coin: str, data: dict) -> None:
+    """Called by scheduler each loop with per-coin analysis data."""
+    _ANALYSIS_STATE[coin] = {**data, "updated_at": time.time()}
+
 
 # ---------------------------------------------------------------------------
 # In-process log buffer
@@ -354,6 +367,10 @@ async def _api_ks_reset(req: web.Request) -> web.Response:
         return _json({"ok": False, "error": str(exc)})
 
 
+async def _api_analysis(req: web.Request) -> web.Response:  # noqa: ARG001
+    return _json({"coins": _ANALYSIS_STATE})
+
+
 async def _handle_index(req: web.Request) -> web.Response:  # noqa: ARG001
     return web.Response(text=_HTML, content_type="text/html")
 
@@ -576,6 +593,31 @@ mark.hl{background:rgba(210,153,34,.3);color:var(--text);border-radius:2px;paddi
 .tv-container{flex:1;min-height:0;position:relative}
 .tv-container>div,.tv-container iframe{position:absolute;inset:0;width:100%;height:100%}
 
+/* ── analysis cards ── */
+.analysis-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:12px;transition:border-color .2s}
+.analysis-card:hover{border-color:var(--accent)}
+.ac-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ac-coin{font-size:18px;font-weight:800;letter-spacing:.02em}
+.ac-price{font-size:13px;color:var(--muted);font-weight:500}
+.ac-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ac-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;min-width:56px;flex-shrink:0}
+.ac-section{border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+.ac-section-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
+.news-bar-track{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;flex:1;min-width:60px}
+.news-bar-fill{height:100%;border-radius:3px;transition:width .4s,background .4s}
+.news-reason{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+.levels-table{width:100%;border-collapse:collapse;font-size:11px}
+.levels-table td{padding:3px 0;vertical-align:middle}
+.levels-table td:last-child{text-align:right}
+.strength-bar{display:inline-block;height:5px;border-radius:2px;background:var(--accent);vertical-align:middle;min-width:2px}
+.ac-updated{font-size:10px;color:var(--muted);text-align:right;margin-top:4px}
+.badge-signal-long{background:rgba(63,185,80,.2);color:var(--green);border:1px solid rgba(63,185,80,.35)}
+.badge-signal-short{background:rgba(248,81,73,.2);color:var(--red);border:1px solid rgba(248,81,73,.35)}
+.badge-signal-flat{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.badge-ml-pass{background:rgba(63,185,80,.15);color:var(--green)}
+.badge-ml-block{background:rgba(248,81,73,.15);color:var(--red)}
+.badge-ml-none{background:var(--surface2);color:var(--muted)}
+
 /* ── responsive ── */
 @media(max-width:768px){
   nav{width:52px;min-width:52px}
@@ -638,6 +680,11 @@ mark.hl{background:rgba(210,153,34,.3);color:var(--text);border-radius:2px;paddi
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v1.5H2zm0 3h12v1.5H2zm0 3h12v1.5H2zm0 3h8v1.5H2z"/></svg>
       <span class="nav-label">Logs</span>
       <span class="kb">6</span>
+    </a>
+    <a class="nav-link" data-page="analysis" onclick="go('analysis')">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 11.5A.5.5 0 0 1 1.5 11h2a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4-4A.5.5 0 0 1 5.5 7h2a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4-6A.5.5 0 0 1 9.5 1h2a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4 3A.5.5 0 0 1 13.5 4h1a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5z"/></svg>
+      <span class="nav-label">Analysis</span>
+      <span class="kb">7</span>
     </a>
   </div>
   <div class="nav-bottom"><span id="status-dot"></span><span id="status-ts">Connecting&#8230;</span></div>
@@ -841,6 +888,20 @@ mark.hl{background:rgba(210,153,34,.3);color:var(--text);border-radius:2px;paddi
     <div id="log-stream"><div class="log-line" style="color:var(--muted);padding:20px 14px">Waiting for log entries&#8230;</div></div>
   </div>
 
+  <!-- Analysis -->
+  <div class="page" id="page-analysis">
+    <h1>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 11.5A.5.5 0 0 1 1.5 11h2a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4-4A.5.5 0 0 1 5.5 7h2a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4-6A.5.5 0 0 1 9.5 1h2a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4 3A.5.5 0 0 1 13.5 4h1a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5z"/></svg>
+      Live Analysis &amp; Signals
+    </h1>
+    <div id="analysis-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">
+      <div class="empty" style="grid-column:1/-1">
+        <svg width="32" height="32" viewBox="0 0 16 16" fill="currentColor"><path d="M1 11.5A.5.5 0 0 1 1.5 11h2a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4-4A.5.5 0 0 1 5.5 7h2a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4-6A.5.5 0 0 1 9.5 1h2a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4 3A.5.5 0 0 1 13.5 4h1a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5z"/></svg>
+        <p>Waiting for first scheduler loop&#8230;</p>
+      </div>
+    </div>
+  </div>
+
   </main>
 </div>
 
@@ -861,7 +922,7 @@ mark.hl{background:rgba(210,153,34,.3);color:var(--text);border-radius:2px;paddi
 // ============================================================
 // ROUTING
 // ============================================================
-const PAGES = ['overview','positions','orders','system','charts','logs'];
+const PAGES = ['overview','positions','orders','system','charts','logs','analysis'];
 let currentPage = 'overview';
 
 function go(page) {
@@ -893,7 +954,7 @@ document.addEventListener('keydown', function(e) {
   }
   if (e.key === 'Escape') { closeModal(); return; }
   const idx = parseInt(e.key, 10);
-  if (idx >= 1 && idx <= 6) { go(PAGES[idx - 1]); return; }
+  if (idx >= 1 && idx <= 7) { go(PAGES[idx - 1]); return; }
   if (e.key === '/') {
     e.preventDefault();
     go('logs');
@@ -1231,6 +1292,7 @@ async function fetchPage(page) {
     else if (page === 'system') renderSystem(d);
     else if (page === 'charts') renderCharts(d);
     else if (page === 'logs') { _rawLogs = d.logs || []; renderLogs(); }
+    else if (page === 'analysis') renderAnalysis(d);
   } catch(e) {
     document.getElementById('status-dot').className = 'dead';
     if (Date.now() - _lastSuccessTs > 30000) {
@@ -1555,6 +1617,128 @@ function _loadTVWidget(coin) {
 }
 
 // ============================================================
+// RENDER: ANALYSIS
+// ============================================================
+function renderAnalysis(d) {
+  const coins = d.coins || {};
+  const grid = document.getElementById('analysis-grid');
+  if (!grid) return;
+  const coinKeys = Object.keys(coins).sort();
+  if (!coinKeys.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><svg width="32" height="32" viewBox="0 0 16 16" fill="currentColor"><path d="M1 11.5A.5.5 0 0 1 1.5 11h2a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4-4A.5.5 0 0 1 5.5 7h2a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4-6A.5.5 0 0 1 9.5 1h2a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5zm4 3A.5.5 0 0 1 13.5 4h1a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5z"/></svg><p>Waiting for first scheduler loop\u2026</p></div>';
+    return;
+  }
+  grid.innerHTML = coinKeys.map(coin => _renderAnalysisCard(coin, coins[coin])).join('');
+}
+
+function _regimeBadgeClass(r) {
+  const map = {trend_up:'badge-green', trend_down:'badge-red', range:'badge-blue', high_vol:'badge-yellow', low_vol:'badge-muted'};
+  return map[r] || 'badge-muted';
+}
+
+function _signalBadge(side, confidence) {
+  if (!side || side === 'flat') return '<span class="badge badge-signal-flat">FLAT</span>';
+  const cls = side === 'long' ? 'badge-signal-long' : 'badge-signal-short';
+  const label = side.toUpperCase();
+  const conf = confidence != null ? ' ' + (confidence * 100).toFixed(0) + '%' : '';
+  return '<span class="badge ' + cls + '">' + label + conf + '</span>';
+}
+
+function _mlBadge(passed) {
+  if (passed === null || passed === undefined) return '<span class="badge badge-ml-none">UNTRAINED</span>';
+  return passed
+    ? '<span class="badge badge-ml-pass">PASSED</span>'
+    : '<span class="badge badge-ml-block">BLOCKED</span>';
+}
+
+function _kindColor(kind) {
+  if (kind === 'support') return 'var(--green)';
+  if (kind === 'resistance') return 'var(--red)';
+  return 'var(--purple)';
+}
+
+function _renderAnalysisCard(coin, c) {
+  const regime = c.regime || 'unknown';
+  const price = c.current_price != null ? '$' + c.current_price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:4}) : '\u2014';
+  const updatedAt = c.updated_at ? new Date(c.updated_at * 1000).toLocaleTimeString() : '\u2014';
+
+  // Regime badge
+  const regimeBadgeHtml = '<span class="badge ' + _regimeBadgeClass(regime) + '">' + regime.replace(/_/g,' ') + '</span>';
+
+  // Signal
+  const signalHtml = _signalBadge(c.signal_side, c.signal_confidence);
+  const strategyHtml = c.signal_strategy ? '<span style="font-size:10px;color:var(--muted)">' + c.signal_strategy + '</span>' : '';
+
+  // ML gate
+  const mlHtml = _mlBadge(c.ml_gate_passed);
+  const mlProbHtml = (c.ml_probability != null) ? '<span style="font-size:10px;color:var(--muted)">p=' + c.ml_probability.toFixed(3) + '</span>' : '';
+
+  // News bar
+  const def = c.news_defensiveness != null ? c.news_defensiveness : 0;
+  const defPct = Math.min(def * 100, 100).toFixed(0);
+  const defColor = def > 0.7 ? 'var(--red)' : def > 0.4 ? 'var(--orange,#d29922)' : 'var(--green)';
+  const newsHtml = '<div class="ac-row" style="gap:6px">'
+    + '<span class="ac-label">News</span>'
+    + '<div class="news-bar-track"><div class="news-bar-fill" style="width:' + defPct + '%;background:' + defColor + '"></div></div>'
+    + '<span style="font-size:10px;color:var(--muted);min-width:28px">' + defPct + '%</span>'
+    + '</div>'
+    + (c.news_reason ? '<div class="news-reason">' + c.news_reason + '</div>' : '');
+
+  // S/R levels
+  const levels = c.levels || [];
+  let levelsHtml = '';
+  if (levels.length) {
+    const nearSup = c.nearest_support != null ? '<span style="font-size:10px;color:var(--green)">Sup: $' + c.nearest_support.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4}) + '</span>' : '';
+    const nearRes = c.nearest_resistance != null ? '<span style="font-size:10px;color:var(--red)">Res: $' + c.nearest_resistance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4}) + '</span>' : '';
+    const nearRow = (nearSup || nearRes) ? '<div class="ac-row" style="margin-bottom:4px;gap:12px">' + nearSup + nearRes + '</div>' : '';
+    levelsHtml = nearRow + '<table class="levels-table">'
+      + levels.slice(0,6).map(lv => {
+          const barW = Math.max(Math.round((lv.strength || 0) * 60), 2);
+          return '<tr>'
+            + '<td style="color:' + _kindColor(lv.kind) + ';font-size:10px;text-transform:uppercase;width:70px">' + (lv.kind || '') + '</td>'
+            + '<td style="font-size:11px;font-family:monospace">$' + (lv.price != null ? lv.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:4}) : '\u2014') + '</td>'
+            + '<td><span class="strength-bar" style="width:' + barW + 'px;background:' + _kindColor(lv.kind) + ';opacity:.7"></span></td>'
+            + '<td style="color:var(--muted)">' + (lv.strength != null ? lv.strength.toFixed(2) : '') + '</td>'
+            + '</tr>';
+        }).join('')
+      + '</table>';
+  } else {
+    levelsHtml = '<span style="font-size:11px;color:var(--muted)">No levels detected</span>';
+  }
+
+  return '<div class="analysis-card">'
+    // Header: coin + price
+    + '<div class="ac-header">'
+    +   '<span class="ac-coin">' + coin + '</span>'
+    +   '<span class="ac-price">' + price + '</span>'
+    + '</div>'
+    // Regime + signal row
+    + '<div class="ac-row">'
+    +   '<span class="ac-label">Regime</span>' + regimeBadgeHtml
+    + '</div>'
+    + '<div class="ac-row">'
+    +   '<span class="ac-label">Signal</span>' + signalHtml + strategyHtml
+    + '</div>'
+    // ML gate row
+    + '<div class="ac-row">'
+    +   '<span class="ac-label">ML Gate</span>' + mlHtml + mlProbHtml
+    + '</div>'
+    // News section
+    + '<div class="ac-section">'
+    +   '<div class="ac-section-title">News Guard</div>'
+    +   newsHtml
+    + '</div>'
+    // S/R levels section
+    + '<div class="ac-section">'
+    +   '<div class="ac-section-title">Support &amp; Resistance</div>'
+    +   levelsHtml
+    + '</div>'
+    // Updated at
+    + '<div class="ac-updated">Updated ' + updatedAt + '</div>'
+    + '</div>';
+}
+
+// ============================================================
 // KILL SWITCH MODALS
 // ============================================================
 let _modalAction = null;
@@ -1656,6 +1840,7 @@ def _make_app() -> web.Application:
     app.router.add_get("/api/system", _api_system)
     app.router.add_get("/api/charts", _api_charts)
     app.router.add_get("/api/logs", _api_logs)
+    app.router.add_get("/api/analysis", _api_analysis)
     app.router.add_post("/api/kill-switch/trigger", _api_ks_trigger)
     app.router.add_post("/api/kill-switch/reset", _api_ks_reset)
     return app

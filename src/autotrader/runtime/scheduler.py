@@ -30,6 +30,10 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def _abs_diff(a: float, b: float) -> float:
+    return abs(a - b)
+
+
 class TradingScheduler:
     """Orchestrates the full trading loop.
 
@@ -219,7 +223,19 @@ class TradingScheduler:
                 log.debug("loop: coin %s signal error: %s", coin, result)
                 continue
 
-            signal, current_price = result
+            signal, current_price, _analysis_extras = result
+            # Push analysis state to dashboard (best-effort, non-blocking)
+            try:
+                from autotrader.monitoring.web import update_analysis_state
+                _news_def = round(getattr(self._news_state, "defensiveness", 0.0), 3) if self._news_state else 0.0
+                _news_reason = getattr(self._news_state, "reason", "") if self._news_state else ""
+                update_analysis_state(coin, {
+                    **_analysis_extras,
+                    "news_defensiveness": _news_def,
+                    "news_reason": _news_reason,
+                })
+            except Exception:
+                pass
             if signal is None or signal.side == "flat" or current_price <= 0.0:
                 continue
 
@@ -428,7 +444,7 @@ class TradingScheduler:
         strategies: list["BaseStrategy"],
         positions: dict,
         equity: float,
-    ) -> "tuple[Any, float]":
+    ) -> "tuple[Any, float, dict]":
         """Read candles, classify regime, and compute the best signal for *coin*.
 
         Returns ``(signal, current_price)``.  Returns ``(None, 0.0)`` when
@@ -453,7 +469,7 @@ class TradingScheduler:
                 candles_by_interval[iv] = df
 
         if not candles_by_interval:
-            return None, 0.0
+            return None, 0.0, {}
 
         # Push candles to the live dashboard (non-blocking, best-effort)
         try:
@@ -467,15 +483,15 @@ class TradingScheduler:
         # Skip if already in an open position (don't pyramid)
         position = positions.get(coin)
         if position is not None and abs(getattr(position, "szi", 0.0)) > 1e-8:
-            return None, 0.0
+            return None, 0.0, {}
 
         # Current price check
         sig_df = candles_by_interval.get(signal_interval)
         if sig_df is None or len(sig_df) == 0:
-            return None, 0.0
+            return None, 0.0, {}
         current_price = float(sig_df["c"].iloc[-1])
         if current_price <= 0.0:
-            return None, 0.0
+            return None, 0.0, {}
 
         # Regime classification
         try:
@@ -518,6 +534,36 @@ class TradingScheduler:
             except Exception as exc:
                 log.debug("loop: level detection failed for %s: %s", coin, exc)
 
+        # Build analysis extras dict (populated incrementally below)
+        _regime_str = stable_regime.value if hasattr(stable_regime, "value") else str(stable_regime)
+        _level_list = [
+            {"price": lv.price, "kind": lv.kind, "strength": round(lv.strength, 3)}
+            for lv in (levels or [])[:8]
+        ] if levels else []
+        # Nearest support / resistance
+        _sup_levels = [lv for lv in (levels or []) if lv.kind in ("support", "both")]
+        _res_levels = [lv for lv in (levels or []) if lv.kind in ("resistance", "both")]
+        _nearest_sup = min(
+            (_abs_diff(lv.price, current_price), lv.price) for lv in _sup_levels
+        )[1] if _sup_levels else None
+        _nearest_res = min(
+            (_abs_diff(lv.price, current_price), lv.price) for lv in _res_levels
+        )[1] if _res_levels else None
+
+        _extras: dict = {
+            "regime": _regime_str,
+            "signal_side": None,
+            "signal_confidence": None,
+            "signal_strategy": None,
+            "ml_gate_passed": None,
+            "ml_probability": None,
+            "levels": _level_list,
+            "nearest_support": _nearest_sup,
+            "nearest_resistance": _nearest_res,
+            "candles_15m": len(sig_df) if sig_df is not None else 0,
+            "current_price": current_price,
+        }
+
         # Run strategies — pass only the ensemble; it aggregates sub-strategies
         # internally.  The first approved non-flat signal wins.
         for strategy in strategies:
@@ -535,6 +581,8 @@ class TradingScheduler:
                 continue
 
             # ML signal quality gate — filter low-probability setups
+            _ml_passed: bool | None = None
+            _ml_prob: float | None = None
             if self._signal_quality_model is not None and self._signal_quality_model.is_trained():
                 try:
                     from autotrader.ml.features import FeatureExtractor
@@ -548,11 +596,18 @@ class TradingScheduler:
                         fear_greed=news_fg,
                     )
                     passes, prob = self._signal_quality_model.quality_gate(feat_vec)
+                    _ml_passed = bool(passes)
+                    _ml_prob = float(prob)
                     if not passes:
                         log.debug(
                             "loop: ML gate rejected %s %s (p_win=%.2f)",
                             coin, signal.side, prob,
                         )
+                        _extras["signal_side"] = signal.side
+                        _extras["signal_confidence"] = round(signal.confidence, 3)
+                        _extras["signal_strategy"] = signal.metadata.get("strategy") if signal.metadata else None
+                        _extras["ml_gate_passed"] = _ml_passed
+                        _extras["ml_probability"] = round(_ml_prob, 3) if _ml_prob is not None else None
                         continue
                     # Scale confidence by ML quality multiplier
                     mult = self._signal_quality_model.confidence_multiplier(prob)
@@ -563,9 +618,14 @@ class TradingScheduler:
                 except Exception as exc:
                     log.debug("loop: ML quality gate error for %s: %s", coin, exc)
 
-            return signal, current_price
+            _extras["signal_side"] = signal.side
+            _extras["signal_confidence"] = round(signal.confidence, 3)
+            _extras["signal_strategy"] = signal.metadata.get("strategy") if signal.metadata else None
+            _extras["ml_gate_passed"] = _ml_passed
+            _extras["ml_probability"] = round(_ml_prob, 3) if _ml_prob is not None else None
+            return signal, current_price, _extras
 
-        return None, current_price
+        return None, current_price, _extras
 
     # ------------------------------------------------------------------
     # Continuous loop
