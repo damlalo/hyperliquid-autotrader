@@ -84,10 +84,6 @@ async def run_main(
     from autotrader.regimes.classifier import RegimeClassifier
     from autotrader.regimes.hysteresis import HysteresisFilter
     from autotrader.risk.approvals import TradeApprover
-    from autotrader.risk.sizing import PositionSizer
-    from autotrader.risk.leverage import LeverageSelector
-    from autotrader.risk.constraints import ConstraintChecker
-    from autotrader.risk.exposure import ExposureAggregator
     from autotrader.risk.hedging import PortfolioHedger
     from autotrader.governance.drift import DriftDetector
     from autotrader.levels.detector import LevelDetector
@@ -192,16 +188,7 @@ async def run_main(
     strategies = build_strategies(config)
     log.info("Loaded %d strategies: %s", len(strategies), [s.name for s in strategies])
 
-    sizer = PositionSizer()
-    lev_selector = LeverageSelector()
-    constraint_checker = ConstraintChecker()
-    exposure_agg = ExposureAggregator()
-    trade_approver = TradeApprover(
-        sizer=sizer,
-        lev_selector=lev_selector,
-        constraint_checker=constraint_checker,
-        exposure_agg=exposure_agg,
-    )
+    trade_approver = TradeApprover()  # internally creates PositionSizer, LeverageSelector, etc.
 
     # ------------------------------------------------------------------
     # 8. Build execution layer
